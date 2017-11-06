@@ -1,0 +1,5 @@
+#ifndef _WW_ALINK_H_
+#define _WW_ALINK_H_
+
+void hlink_entry(ULONG which_thread);
+#endif

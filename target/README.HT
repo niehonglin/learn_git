@@ -1,0 +1,3 @@
+HOSTED  I-WSR 3.3.4 CS3 fixed issues/new features
+1:Fixed Using benchtx, TCP Tx traffic sometimes stops earlier than the preset time.
+2:Add disable ipv6 after suspend

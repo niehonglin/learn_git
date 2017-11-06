@@ -1,0 +1,23 @@
+HOSTLESS I-WSR 3.3.4 CS3 fixed issues/new features
+1: Fixed DNS client IPv6 hostname resolve failure.
+2: Fixed incorrectly returned A_OK from HTTP client when Wi-Fi is disconnected.
+3: Fixed device stall occurred during long duration raw packet transmission.
+4: Fixed system crash when the wmiconfig --mode command is issued.
+5: Fixed Watchdog trigger failed 
+6: Fixed sniffer failed under HT40 mode
+7: Fixed Udp server cannot receive any bytes when TCP connection blocks
+8: Fixed qcom_listen() always returns -1 
+
+New API in 3.3.4 CS3
+
+1:A_STATUS _qcom_set_ping_id(A_UINT32 pingId)
+  Description:
+              This function sets the ping id
+  Parameters:
+              [in] pingId : pind id number
+  Returns:
+              A_OK  -- success
+
+
+new CLI command in 3.3.4 CS3
+	wmiconfig ¨C-ht40flag <default,above,below>       default: unchanged channels  ; above : secondary chan is above primary  ; below : secondary chan is below primary  

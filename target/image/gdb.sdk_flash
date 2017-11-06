@@ -1,0 +1,48 @@
+# xt-gdb script to erase and re-program flash on
+# AR4004/AR4002 [KF 1.1.2]
+#
+# NOTE: ALL PREVIOUS CONTENTS OF FLASH WILL BE LOST
+#
+# Usage:
+#   cd to "image" directory
+#   xt-gdb -x gdb.sdk_flash
+#     target remote <YOUR_OCD_IP_ADDRESS>:20000
+#     sdk_flash ../bin/raw_flashimage_AR400X_REV4_IOT_hostless_single.bin
+#     (You may change the raw_flashimage file, above, to any valid flash image.)
+#
+
+define sdk_flash
+    reset
+    set *((int *)0x180c0) |= 0xcf
+    set pagination off
+    set confirm no
+    delete
+    reset
+    hbreak *0x940f98
+    cont
+    delete
+    hbreak *0xa02800
+    set *((int *)0x42881c)=0xa02800
+    set *((int *)0x180c0) |= 0xcf
+    cont
+    delete
+    load sdk_flash.out
+    add-symbol-file sdk_flash.out 0xa02800
+    set $a10=1
+    set normal_mode=0
+    watch *&db_signal
+    set db_signal=0xff
+    cont
+    cont
+    set $buff=db_buffer
+    set db_offset=0
+    set db_length=262144
+    restore $arg0 binary $buff
+    set db_signal=0
+    cont
+    set db_signal=2
+    cont
+    delete
+    set confirm yes
+    echo \nsdk_flash is DONE\n
+end

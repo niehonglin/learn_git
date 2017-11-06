@@ -1,0 +1,48 @@
+src/ww_hlink.c: In function ‘hilink_getssid’:
+src/ww_hlink.c:152: warning: pointer targets in passing argument 2 of ‘qcomWlanApiIndirectionTable._qcom_get_ssid’ differ in signedness
+src/ww_hlink.c:160: warning: pointer targets in passing argument 1 of ‘strlen’ differ in signedness
+src/ww_hlink.c: In function ‘start_hlink’:
+src/ww_hlink.c:356: warning: unused variable ‘state’
+src/ww_hlink.c: In function ‘hlink_entry’:
+src/ww_hlink.c:469: warning: implicit declaration of function ‘print_json’
+In file included from hlink/src/hilink_json.c:10:
+/home/zhuzuoliang/build_directory/hilink/target/demo/wewins_hlink/include/ww_hlink.h:6: warning: parameter names (without types) in function declaration
+hlink/src/hilink_json.c: In function ‘hilink_json_parse’:
+hlink/src/hilink_json.c:57: warning: assignment discards qualifiers from pointer target type
+In file included from hlink/src/platform_flash.c:4:
+/home/zhuzuoliang/build_directory/hilink/target/demo/wewins_hlink/include/ww_hlink.h:6: warning: parameter names (without types) in function declaration
+hlink/src/platform_flash.c: In function ‘hilink_save_flash’:
+hlink/src/platform_flash.c:7: warning: implicit declaration of function ‘printf’
+hlink/src/platform_flash.c:7: warning: incompatible implicit declaration of built-in function ‘printf’
+hlink/src/platform_flash.c: In function ‘hilink_read_flash’:
+hlink/src/platform_flash.c:12: warning: incompatible implicit declaration of built-in function ‘printf’
+In file included from hlink/src/platform_gettime.c:4:
+/home/zhuzuoliang/build_directory/hilink/target/demo/wewins_hlink/include/ww_hlink.h:6: warning: parameter names (without types) in function declaration
+hlink/src/platform_gettime.c: In function ‘hilink_gettime’:
+hlink/src/platform_gettime.c:6: warning: implicit declaration of function ‘printf’
+hlink/src/platform_gettime.c:6: warning: incompatible implicit declaration of built-in function ‘printf’
+In file included from hlink/src/platform_mem.c:4:
+/home/zhuzuoliang/build_directory/hilink/target/demo/wewins_hlink/include/ww_hlink.h:6: warning: parameter names (without types) in function declaration
+hlink/src/platform_mem.c: In function ‘hilink_memset’:
+hlink/src/platform_mem.c:7: warning: implicit declaration of function ‘printf’
+hlink/src/platform_mem.c:7: warning: incompatible implicit declaration of built-in function ‘printf’
+hlink/src/platform_mem.c: In function ‘hilink_memcpy’:
+hlink/src/platform_mem.c:12: warning: incompatible implicit declaration of built-in function ‘printf’
+hlink/src/platform_mem.c: In function ‘hilink_memcmp’:
+hlink/src/platform_mem.c:17: warning: incompatible implicit declaration of built-in function ‘printf’
+hlink/src/platform_mem.c: In function ‘hilink_free’:
+hlink/src/platform_mem.c:22: warning: incompatible implicit declaration of built-in function ‘printf’
+In file included from hlink/src/platform_rand.c:3:
+/home/zhuzuoliang/build_directory/hilink/target/demo/wewins_hlink/include/ww_hlink.h:6: warning: parameter names (without types) in function declaration
+hlink/src/platform_rand.c: In function ‘hilink_rand’:
+hlink/src/platform_rand.c:8: warning: implicit declaration of function ‘printf’
+hlink/src/platform_rand.c:8: warning: incompatible implicit declaration of built-in function ‘printf’
+hlink/src/platform_rand.c: In function ‘hilink_srand’:
+hlink/src/platform_rand.c:14: warning: incompatible implicit declaration of built-in function ‘printf’
+In file included from hlink/src/platform_socket.c:15:
+/home/zhuzuoliang/build_directory/hilink/target/demo/wewins_hlink/include/ww_hlink.h:6: warning: parameter names (without types) in function declaration
+In file included from hlink/src/platform_utils.c:7:
+/home/zhuzuoliang/build_directory/hilink/target/demo/wewins_hlink/include/ww_hlink.h:6: warning: parameter names (without types) in function declaration
+hlink/src/platform_utils.c: In function ‘hilink_strrchr’:
+hlink/src/platform_utils.c:55: warning: return discards qualifiers from pointer target type
+xt-ar: creating /home/zhuzuoliang/build_directory/hilink/target/lib/libiot_demo.a

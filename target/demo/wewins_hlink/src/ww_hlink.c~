@@ -1,0 +1,244 @@
+#include "qcom_common.h"
+#include "qcom_gpio.h"
+#include "qcom_gpio_interrupts.h"
+#include "wmi.h"
+#include "qcom/qcom_wlan.h"
+#include "threadx/tx_api.h"
+#include "ww_hlink.h"
+#include "hilink_link.h"
+
+TX_THREAD channel_task_handle;
+TX_THREAD beacon_task_handle;
+
+char *channel_change_stack_pointer;
+char *beacon_send_stack_pointer;
+
+#define CHAN_CHA_STACK_SIZE (2* 1024 )
+//#define BEAC_SEN_STACK_SIZE (2 * 1024 )
+//#define HILINK_BEACON_PERIOD    50 
+#define WIFI_RX_LEN0_OPEN    64
+#define WIFI_RX_LEN0_WEP     72
+#define WIFI_RX_LEN0_TKIP    84
+#define WIFI_RX_LEN0_AES     80
+//#define device_id 0
+#define startIP 0xC0A801C3
+#define endIP   0xC0A801C7
+#define IP_LEASE    (60 * 60 * 1000)
+static int s_cur_channel;
+static hilink_s_context hilink_s_ctx;
+static hilink_s_result hilink_s_res;
+
+/* Hilink SmartLink runtime context instantiation */
+
+static hilink_s_context hilink_s_ctx;
+void channel_change_task_entry(ULONG which_thread)
+{
+    printf("channel_change_task_entry");
+    while(1)
+    {
+        if (0 == hilink_link_get_lock_ready())
+        {
+            s_cur_channel++;
+            if (s_cur_channel >= 13)
+            {
+               s_cur_channel = 1;
+            }
+            
+            //s_cur_channel=6;
+            /*切换信道*/
+             qcom_set_channel(0,s_cur_channel);
+            /*清除HiLink.Link的buffer及状态*/
+            hilink_link_reset();
+        }
+
+        tx_thread_sleep(200);
+    }
+}
+static int  beacon_send = 0;
+static void softap_callback(A_UINT8 device_id, int val)
+{
+    printf("softap_callback test dev %d, val %d\n", device_id, val);
+}
+void ap_start(void)
+{
+    char devicessid[33]={0};
+    unsigned int devicessid_len = 0;
+    char *hilink_sec_key="00000000000000000AF273"; /* 当前可以赋值为:后5用MAC地址后5个字节，前面补字符0*/
+    char *hilink_sn="3";
+    char *hilink_prod_id="9002";
+    int state;
+    beacon_send = 1;
+    char mac_str[18]={0};
+    unsigned char mac[6];
+
+    qcom_mac_get(0, mac);
+
+    sprintf(mac_str,"%02x%02x%02x%02x%02x%02x",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
+
+    printf("device mac: %s \n",mac_str);
+    
+    /**相关参数可以从 智能家庭产品设备名称显示规范 附表-HiLink认证设备清单 获得*/
+    hilink_link_get_devicessid("11", hilink_prod_id, hilink_sn,
+                              "B",  hilink_sec_key, devicessid, &devicessid_len);
+    /* output e.g  device ssid:Hi11100a1B000000000000000002FE01,ssidlen:32 */
+
+   // if(beacon_send==1)
+    //qcom_ap_hidden_mode_enable(device_id,1);
+    //else
+
+    //qcom_ap_hidden_mode_enable(device_id,0);
+
+    //state = qcom_op_set_mode(device_id,1);
+    //state = qcom_set_ssid(device_id,devicessid);
+    //state = qcom_set_channel(device_id,3);
+    //state = qcom_set_phy_mode(device_id,3);
+    //state = qcom_set_tx_power(device_id, 17);
+   
+    qcom_set_connect_callback(0, softap_callback);
+    qcom_op_set_mode(0,1);
+    qcom_ap_start(0,devicessid);
+   
+}
+int smtlink_complete(void)
+{
+    int status = 0;
+    memset(&hilink_s_res, 0, sizeof(hilink_s_result));
+    status = hilink_link_get_result(&hilink_s_res);
+    printf("smtlink_complete status :%d \n",status);
+    if(status == 0)
+    {
+         printf("hilink_s_res.ssid is :%s\n",hilink_s_res.ssid);
+         printf("hilink_s_res.pwd is :%s\n",hilink_s_res.pwd);
+        /**Notice 连接wifi即可停发 beacon,平台相关*/
+        //beacon_send = 0;
+
+        /**hilink_s_res.enc_type为 HI_WIFI_ENC_UNKNOWN时，需自适应获取加密方式，平台相关
+           如果需要重启连接wifi则需要保存result和notifypacket*/
+        //wifi_sta_connect(hilink_s_res.ssid, hilink_s_res.ssid_len, hilink_s_res.pwd, hilink_s_res.pwd_len, hilink_s_res.enc_type);
+    }
+
+    return status;
+}
+int smtlink_parse_cb(const void * frame, unsigned short len)
+{
+    int ret;
+    int lock_channel = s_cur_channel;
+    int i;
+#if 0
+    if(len>303)
+   {
+    unsigned char mac[6]={0x44,0x6E,0xE5,0x69,0x68,0xF6};  //手机mac
+    //IEEE80211_FRAME stFrame80211;
+    //memcpy((void*)&stFrame80211, (const void*)frame, sizeof(stFrame80211));
+      {
+          printf("----len=[%d]\n\r",len);
+         if((((char*)frame)[0]=0x88)&&(((char*)frame)[1]=0x41))
+	 {
+          for(i=0;i<24;i++)
+          {
+                printf("0x%02X,",((char*)frame)[i]);
+          }
+          printf("\n\r\n\r",len);
+	}
+      }
+  }
+#endif
+   // printf("wangyu test ..................\n");
+    ret = hilink_link_parse(frame, len);
+    
+    if(ret>0)
+    {
+      printf(" hilink_link_parse ret is :%d \n",ret );
+    }
+    if (ret == HI_WIFI_STATUS_FINISH)
+    {
+         smtlink_complete();
+        /**to call sample_smtlink_complete get ssid and passpword*/
+    }
+    else if (ret == HI_WIFI_STATUS_CHANNEL_LOCKED)
+    {
+        printf("hilink_smtlink_lock at channel[%d]\n\r", lock_channel);
+        /**to lock channel.考虑到多线程，hilink_link_parse 调用完后可能由于时间差，已经切频，这里可以重设信道.
+        * 另外考虑到信道频谱物理特性，会有锁错信道的情况出现，如果芯片支持解析802.11 radio frame获得信道号，则可有效避免这样的问题
+        */
+        s_cur_channel = lock_channel;
+        qcom_set_channel(0, lock_channel);
+    }
+    else if (ret == HI_WIFI_STATUS_CHANNEL_UNLOCKED)
+    {
+        /**to release channel*/
+    }
+
+    return ret;
+}
+extern PROMISC_MODE  promiscMode;
+int start_hlink(void)
+{
+    int ret;
+    int state;
+    hilink_s_pkt0len st_pkt0len;
+
+    /* Print hilink version info */
+    printf("[HiLink] %s\r\n", hilink_link_get_version());
+    /*设置为AP模式*/
+    ap_start();
+#if 1
+    /* Init runtime context */
+    memset(&hilink_s_ctx, 0, sizeof(hilink_s_context));
+    memset(&st_pkt0len,   0, sizeof(hilink_s_pkt0len));
+    ret = hilink_link_init(&hilink_s_ctx);
+    if(ret == 0)
+    {
+        hilink_link_reset();
+        /*设置wifi不同加密类型的QOS Data的0基准长度,平台相关,可以自测试或向芯片商获得.
+        APP 发送的数据长度是len = 0, 设备测收到的对应wifi frame len长度值，不同加密类型长度不一样*/
+        st_pkt0len.len_open = WIFI_RX_LEN0_OPEN;
+        st_pkt0len.len_wep  = WIFI_RX_LEN0_WEP;
+        st_pkt0len.len_tkip = WIFI_RX_LEN0_TKIP;
+        st_pkt0len.len_aes  = WIFI_RX_LEN0_AES;
+        (void)hilink_link_set_pkt0len(&st_pkt0len);
+
+    /*创建切换信道任务,平台相关*/
+        channel_change_stack_pointer=qcom_mem_alloc(CHAN_CHA_STACK_SIZE);
+        state = tx_thread_create(&channel_task_handle, 
+				"channel_change", 
+				 channel_change_task_entry, 
+				 0, 
+				 channel_change_stack_pointer, 
+                                 CHAN_CHA_STACK_SIZE, 16, 16, 4, TX_AUTO_START);
+        if (state < 0)
+        {
+            printf("create channel_change_task fail!\r\n");
+        }
+        printf("create channel_change_task suucess!\r\n");
+       
+	
+        //ap_start();
+	promiscMode = PROMISC_MODE_NORMAL;
+	qcom_promiscuous_enable(1);
+        /*注册802.11 数据接收回调,平台相关*/
+        //sample_wifi_register_cb(sample_smtlink_parse_cb, NULL);
+	//qcom_set_promiscuous_rx_cb((QCOM_PROMISCUOUS_CB)smartconfig_promisc_rx_cb);
+	state=qcom_set_promiscuous_rx_cb((QCOM_PROMISCUOUS_CB)smtlink_parse_cb);
+        printf("wangyu test 2...............%d\n",state);
+    }
+#endif
+
+    return ret;
+}
+void hlink_entry(ULONG which_thread)
+{
+    #define PRINTF_ENBALE 1
+    extern void user_pre_init(void);
+    user_pre_init();
+    qcom_enable_print(PRINTF_ENBALE);
+    //Add all the alternate configurations for each GPIO pin
+    //add_gpio_configurations();
+
+	//test
+    start_hlink();
+   while(1)
+	{
+	tx_thread_sleep(100);
+	}
+}

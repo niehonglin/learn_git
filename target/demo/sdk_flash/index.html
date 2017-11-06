@@ -1,0 +1,17 @@
+<html>
+<head><title>IOE Kingfisher</title></head>
+<body>
+<form action="index.cgi" enctype="application/x-www-form-urlencoded" method="post" name="cred">
+<h1>IOE Kingfisher Simple Connect v2</h1>
+<p>SSID <input maxlength="32" name="ssid" size="32" type="text" /></p>
+<p> SSID is <!--#echo var="ssid" --></p>
+<p>Authentication <input name="auth" type="radio" value="open"/>Open<input name="auth" type="radio" value="wpa"/>WPA<input name="auth" type="radio" value="wpa2"/>WPA2</p>
+<p> Authen is <!--#echo var="auth" --></p>
+<p>Encryption <input name="sec" type="radio" value="none"/>None<input name="sec" type="radio" value="tkip"/>TKIP<input name="sec" type="radio" value="AES"/>CCMP</p>
+<p> Encryption is <!--#echo var="sec" --></p>
+<p>Passphrase <input maxlength="32" name="pass" size="32" type="password" /></p>
+<p> Passphrase is <!--#echo var="pass" --></p>
+<p><input name="Submit" type="submit" value="Submit"></p>
+</form>
+</body>
+</html>

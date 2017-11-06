@@ -1,0 +1,395 @@
+#include <qcom/base.h>
+#include <qcom_utils.h>
+#include <qcom_cli.h>
+#include <qcom_uart.h>
+#include <qcom_system.h>
+#include <qcom_scan.h>
+#include <qcom_wlan.h>
+#include <qcom/select_api.h>
+#include <qcom/qcom_timer.h>
+#include <threadx/tx_api.h>
+#include "ww_debug.h"
+
+#define RX_BUFFER_LEN   128
+
+#define CMD_UNKNOWN    -1
+#define CMD_SELECT_TIMEOUT -2
+#define CMD_SELECT_ERROR   -3
+#define CMD_QUERY       0
+#define CMD_NET_CONF    1
+#define CMD_ROUTER_SCAN 2
+#define CMD_ROUTER_SCAN_RESULT_ACK 3
+
+//extern TX_THREAD uart_thread;
+
+
+#define cur_dev_id  0
+
+char rssi_buff[7];
+
+volatile char rssi_retry = 0;
+
+int uart_fd = -1;
+
+
+void uart_pin_init()
+{
+	#ifdef PIN6_PIN7_AS_UART0
+    qcom_uart_rx_pin_set(6,10);
+    qcom_uart_tx_pin_set(7,11);
+	#endif
+	#ifdef PIN10_PIN11_AS_UART0
+    qcom_uart_rx_pin_set(10,6);
+    qcom_uart_tx_pin_set(11,7);
+	#endif 
+	#ifdef PIN2_PIN7_AS_UART0
+    qcom_uart_rx_pin_set(2,10);
+    qcom_uart_tx_pin_set(7,11);
+	#endif
+    //uart_swap();
+    qcom_uart_init();
+}
+
+int uart_open(void)
+{
+	//int uart_fd_dbg = -1;
+	int uart_fd_com = -1;
+	//qcom_uart_para dbg_uart_cfg;
+	qcom_uart_para com_uart_cfg;
+
+	com_uart_cfg.BaudRate    = 9600;
+	com_uart_cfg.number      = 8;
+	com_uart_cfg.StopBits    = 1;
+	com_uart_cfg.parity      = 0;
+	com_uart_cfg.FlowControl = 0;
+	/*
+	dbg_uart_cfg.BaudRate    = 115200;
+	dbg_uart_cfg.number      = 8;
+	dbg_uart_cfg.StopBits    = 1;
+	dbg_uart_cfg.parity      = 0;
+	dbg_uart_cfg.FlowControl = 0;
+	
+	uart_fd_dbg = qcom_uart_open((A_CHAR *)"UART1");
+	if( uart_fd_dbg == -1 )
+	{
+		uart_printf_error("uart 1 open failed\n");
+	    return -1;
+	}
+	*/
+	uart_fd_com = qcom_uart_open((A_CHAR *)"UART0");
+	if( uart_fd_com == -1 )
+	{
+	    uart_printf_error("uart 0 open failed\n");
+	    return -1;
+	}
+	//qcom_set_uart_config((A_CHAR *)"UART1",&dbg_uart_cfg);
+	qcom_set_uart_config((A_CHAR *)"UART0",&com_uart_cfg);
+	uart_printf_info("uart_fd_com = %d\n",uart_fd_com);
+	return uart_fd_com;
+}
+
+
+unsigned int Fuc_GetCRC(unsigned vInit,unsigned char* ptr,unsigned char len)       
+{   
+	const  unsigned int tCRCData[] = {	0x0000, 0x1081, 0x2102, 0x3183,0x4204, 0x5285, 0x6306, 0x7387,
+										0x8408, 0x9489, 0xa50a, 0xb58b,0xc60c, 0xd68d, 0xe70e, 0xf78f};
+    unsigned int vCRC = vInit;
+    while(len--!=0)
+    {   vCRC=(( vCRC >> 4 )^tCRCData[( vCRC&0x0f )^((*ptr)&0x0f)]); 
+        vCRC=(( vCRC >> 4 )^tCRCData[( vCRC&0x0f )^((*ptr)>>4)]);
+        ptr++;
+    }
+    return ~vCRC;
+}
+
+static unsigned char rssi_2_quility(unsigned char rssi)
+{
+    if (rssi < 55)
+        return 100;
+    if (rssi > 95)
+        return 0;
+    return (95-rssi)*5/2;
+}
+
+unsigned char ww_get_rssi(void)
+{
+	int j;
+	A_UINT16 count = 0;
+	QCOM_BSS_SCAN_INFO* pOut;
+	qcom_start_scan_params_t scanParams;
+	scanParams.forceFgScan  = 1;
+	scanParams.scanType     = 0;
+	scanParams.numChannels  = 0;
+	scanParams.forceScanIntervalInMs = 1;
+	scanParams.homeDwellTimeInMs = 0; 
+	uart_printf_info("enter ww_get_rssi\n");
+	qcom_set_ssid(cur_dev_id, "");
+	qcom_thread_msleep(100);
+	qcom_set_scan(cur_dev_id, &scanParams);
+	qcom_thread_msleep(100);
+	if(qcom_get_scan(cur_dev_id, &pOut, &count) == A_OK)
+	{
+		QCOM_BSS_SCAN_INFO* info = pOut;
+		uart_printf_info("ww_get_rssi count:%d\n",count);  
+		for (j = 0; j < count; j++)
+		{
+			if(strcmp(info[j].ssid,"WHWIFI")==0)
+			{
+
+				if(info[j].rssi > 45)
+				{
+					return(0);
+				}
+				else
+				{
+					return((100-info[j].rssi));
+				}
+			}
+		}
+		return(100);
+
+	}
+	else
+	{
+		uart_printf_error("ww_get_rssi fail \n");
+		return(100);
+	}
+ 
+}
+
+void uart_cmd_construct(char *buffer, int type, int *len)
+{
+	//char net_conf_resp[6]={0xA5, 0x5A, 0x04, 0x00, 0x68, 0x27};
+	
+	//char router_scan_resp[6]={0xA5, 0x5A, 0x03, 0x0C, 0xEF, 0x43};
+	
+	//char query_cmd[8]={0xA5,0x5A,0x05,0x01,0x1A,0x03,0x92,0x2F};
+	
+	switch(type)
+	{	
+		case CMD_NET_CONF:
+			//memcpy(buffer,net_conf_resp,6);
+			buffer[0] = 0xA5; buffer[1] = 0x5A;
+			buffer[2] = 0x04; buffer[3] = 0x00;
+			buffer[4] = 0x68; buffer[5] = 0x27;
+			*len = 6;
+			break;
+		case CMD_ROUTER_SCAN:
+		{
+			//uart_tx(uart_fd, router_scan_resp, 6);
+			//unsigned char rssi = ww_get_rssi();
+			//rssi = rssi_2_quility(rssi);
+			//unsigned char data[7] = {0xA5, 0X5A, 0x04, 0x0F, rssi};
+			//unsigned int crc = Fuc_GetCRC(0xffff, &data[2], 3);
+			//memcpy(data+5, &crc , sizeof(unsigned int));
+			//memcpy(rssi_buff, data, 7);
+			//rssi_retry = 3;
+			//memcpy(buffer,router_scan_resp,6);
+			buffer[0] = 0xA5; buffer[1] = 0x5A;
+			buffer[2] = 0x03; buffer[3] = 0x0C;
+			buffer[4] = 0xEF; buffer[5] = 0x43;
+			*len = 6;
+			break;
+		}
+		case CMD_ROUTER_SCAN_RESULT_ACK:
+			rssi_retry = 0;
+			printf("receive ack\n");
+		case CMD_UNKNOWN:
+		case CMD_SELECT_TIMEOUT:
+		case CMD_SELECT_ERROR:
+		default:
+			//memcpy(buffer,query_cmd,8);
+			buffer[0] = 0xA5; buffer[1] = 0x5A;
+			buffer[2] = 0x05; buffer[3] = 0X01;
+			buffer[4] = 0x1A; buffer[5] = 0x03;
+			buffer[6] = 0x92; buffer[7] = 0x2F;
+			*len = 8;
+			break;
+	}
+}
+
+int uart_tx(int fd, char *data, unsigned int len)
+{
+	unsigned int total = 0;
+	unsigned int wlen = len;  
+	char *p_data = data;
+	while(1)
+	{
+		qcom_uart_write(fd, p_data, &wlen);
+    
+		p_data = p_data + wlen;
+		total  = total  + wlen;
+		wlen   = len    - total;
+		if(wlen == 0)
+		{
+			return 1;
+		}
+		qcom_thread_msleep(10);
+	}
+	return 0;  
+}
+
+int uart_rx(int fd, char *buffer, A_UINT32 tlen)
+{
+	int ret;
+	char *p_buf = buffer;
+	A_UINT32 rlen = tlen;
+	A_UINT32 total = 0;
+	A_INT16  len = -1;
+	q_fd_set fds;
+  	FD_ZERO(&fds);
+    FD_SET(fd, &fds);
+	struct timeval timeout;
+	timeout.tv_sec = 5;
+	timeout.tv_usec = 0;
+	char net_config_cmd[6];
+	net_config_cmd[0] = 0xA5;
+	net_config_cmd[1] = 0x5A;
+	net_config_cmd[2] = 0x03;
+	net_config_cmd[3] = 0x03;
+	net_config_cmd[4] = 0x17;
+	net_config_cmd[5] = 0xB4;
+	char router_scan_cmd[6];
+	router_scan_cmd[0] = 0xA5;
+	router_scan_cmd[1] = 0x5A;
+	router_scan_cmd[2] = 0x03;
+	router_scan_cmd[3] = 0x0B;
+	router_scan_cmd[4] = 0x9B;
+	router_scan_cmd[5] = 0xFC;
+	char router_scan_result_ack[6];
+	router_scan_result_ack[0] = 0xA5;
+	router_scan_result_ack[1] = 0x5A;
+	router_scan_result_ack[2] = 0x03;
+	router_scan_result_ack[3] = 0x10;
+	router_scan_result_ack[4] = 0x35;
+	router_scan_result_ack[5] = 0xAE;
+  	while(1)
+  	{
+		uart_printf_info("rx selecting.....\n");
+    	ret = qcom_select(fd+1, &fds, NULL, NULL, &timeout);
+    	if(ret == 0)
+    	{
+        	return CMD_SELECT_TIMEOUT;
+    	}
+		if(ret < 0)
+		{
+			return CMD_SELECT_ERROR;
+		}
+		tx_thread_sleep(50);
+        qcom_uart_read(fd, p_buf, &rlen);
+		uart_printf_info("rlen=%d\n",rlen);	
+		p_buf = p_buf + rlen;
+		total = total + rlen; 
+		rlen  = tlen  - total;
+		if(total <= 2)
+		{
+			continue;
+		}
+		if(total > 2 && len == -1)
+		{
+			if(buffer[0] != 0xA5 || buffer[1] != 0x5A)
+			{
+				return CMD_UNKNOWN;
+			}
+			uart_printf_info("TLV L=%02x\n",buffer[2]);
+			len = buffer[2];
+		}
+		if(total >= (len + 3))
+		{	
+			//const char net_config_cmd[] = {0xA5, 0x5A, 0x03, 0x03, 0x17, 0xB4};
+			//const char router_scan_cmd[] = {0xA5, 0x5A, 0x03, 0x0B, 0x9B, 0xFC};
+			//const char router_scan_result_ack[] = {0xA5, 0x5A, 0x03, 0x10, 0x35, 0xAE};
+			if( memcmp(net_config_cmd, buffer, 6) == 0 )
+			{
+				uart_printf_info("net config cmd\n");
+				return CMD_NET_CONF;
+			}
+			else if( memcmp(router_scan_cmd, buffer, 6) == 0 )
+			{
+				uart_printf_info("router scan cmd\n");
+				return CMD_ROUTER_SCAN;
+			}
+			else if( memcmp(router_scan_result_ack, buffer, 6) == 0 )
+			{
+				uart_printf_info("router scan result ack\n");
+				return CMD_ROUTER_SCAN_RESULT_ACK;
+			}
+			else
+			{
+				return CMD_UNKNOWN;
+			}
+				
+		}
+	}
+}
+
+extern TX_THREAD rssi_thread;
+void uart_entry(ULONG  which_thread)
+{
+  	extern void user_pre_init(void);
+  	user_pre_init();
+ 	qcom_enable_print(1);
+	uart_pin_init();
+	uart_fd = uart_open();
+	//extern TX_THREAD uart_thread;
+	//uart_printf_info("uart begin and suspend......\n");
+	//tx_thread_suspend(&uart_thread);
+	
+	int cmd_type = CMD_QUERY;
+	char buffer[RX_BUFFER_LEN];
+	//char cmd_buff[8] = {0xA5,0x5A,0x05,0x01,0x1A,0x03,0x92,0x2F};
+	char cmd_buff[8];
+	cmd_buff[0] = 0xA5; 
+	cmd_buff[1] = 0x5A;
+	cmd_buff[2] = 0x05; 
+	cmd_buff[3] = 0X01;
+	cmd_buff[4] = 0x1A; 
+	cmd_buff[5] = 0x03;
+	cmd_buff[6] = 0x92; 
+	cmd_buff[7] = 0x2F;
+	int cmd_len = 8;
+    while(1)
+    {
+	    uart_tx(uart_fd, cmd_buff, cmd_len);
+	    if(cmd_type == CMD_ROUTER_SCAN)  
+	    {
+            cmd_type = CMD_QUERY;
+            tx_thread_resume(&rssi_thread);
+	    }
+	    cmd_type = uart_rx(uart_fd, buffer, RX_BUFFER_LEN);
+	    uart_cmd_construct(cmd_buff, cmd_type, &cmd_len);
+	    printf("rssi retry = %d, cmd_type = %d\n", rssi_retry, cmd_type);
+	    if(rssi_retry > 0)
+	    {
+		    memcpy(cmd_buff, rssi_buff, 7);
+		    cmd_len=7;
+		    rssi_retry--;
+	    }
+    }
+}
+
+void rssi_entry(ULONG  which_thread)
+{
+	extern void user_pre_init(void);
+  	user_pre_init();
+ 	qcom_enable_print(1);
+	unsigned int crc;
+	unsigned char rssi;
+	unsigned char data[7];
+	data[0]=0xA5;
+	data[1]=0X5A;
+	data[2]=0x04;
+	data[3]=0x0F;
+	while(1)
+	{
+	    printf("rssi waiting.....\n");
+	 	tx_thread_suspend(&rssi_thread);
+	    rssi = ww_get_rssi();
+		rssi = rssi_2_quility(rssi);
+		data[4] = rssi;
+		crc = Fuc_GetCRC(0xffff, data+2, 3);
+		memcpy(data+5, &crc , sizeof(unsigned int));
+		memcpy(rssi_buff, data, 7);
+		rssi_retry = 3;
+	}
+}

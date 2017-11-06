@@ -1,0 +1,13 @@
+# 2 regulatoryData_AG.diffs.bin bpatch
+# Derived from $WLANFW_DIR/support/ini2dset/ini_ar6006_rev11_patch/ini_dsets.txt
+# Sample INI_OVERRIDE_DIRs:
+#     INI_OVERRIDE_DIR=$WLANFW_DIR/support/ini2dset/ini_ar6006_rev11_patch
+#     INI_OVERRIDE_DIR=$SDK_ROOT/tool/ini_override
+
+0x137 $INI_OVERRIDE_DIR/ini_common_override_0.bin
+0x138 $INI_OVERRIDE_DIR/ini_common_override_1.bin
+0x139 $INI_OVERRIDE_DIR/ini_mode_override_0.bin
+0x13a $INI_OVERRIDE_DIR/ini_mode_override_1.bin
+0x13b $INI_OVERRIDE_DIR/ini_mode_override_2.bin
+0x13c $INI_OVERRIDE_DIR/ini_mode_override_3.bin
+0x13d $INI_OVERRIDE_DIR/ini_mode_override_4.bin

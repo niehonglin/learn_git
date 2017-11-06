@@ -1,0 +1,114 @@
+#include "ww_dset.h"
+#include <qcom/qcom_utils.h>
+#include <qcom/base.h>
+#include <qcom/qcom_dset.h>
+#include <dset_api.h>
+
+#define WW_NVRAM_SIZE   (256)
+
+
+int ww_write_nv(unsigned char *buf, unsigned int count,unsigned int dset_id)
+{
+#if 1
+        printf("enter ww_write_nv **************\n");
+	int status  = A_ERROR;
+	uint32_t handle = 0;
+	int size        = 0;
+	//int i;
+	A_UINT8 temp_buf[WW_NVRAM_SIZE] = {0};
+	// overwrite the dset if it already exists
+	qcom_dset_delete(dset_id, DSET_MEDIA_NVRAM, NULL, NULL);
+
+	// first create the dset (or overwrite if it already exists)
+	status = qcom_dset_create(&handle, dset_id, WW_NVRAM_SIZE, DSET_MEDIA_NVRAM, NULL, NULL);
+	if (status != A_OK) {
+		// failed to create; do nothing?
+		qcom_printf("####create dset failed\n");
+		return -1;
+	}
+	size = qcom_dset_size(handle);
+	qcom_printf("####create dset size=%d,count=%d\n",size,count);
+	// now write the entire emulated NVRAM chunk to the dset
+	status = qcom_dset_write(
+						handle,
+						buf,count,//(A_UINT8*)IOT_EMULATED_NVRAM, sizeof(IOT_EMULATED_NVRAM),
+						0, DSET_MEDIA_NVRAM, NULL, NULL);
+
+	if (status == A_OK) {
+		// now commit
+		size = qcom_dset_size(handle);
+		qcom_printf("####write flash succ:%d\n",size);
+
+		status = qcom_dset_commit(handle, NULL, NULL);
+		if( status != A_OK )
+		{
+			qcom_printf("####commit flash fail\n");
+		}
+		qcom_dset_read(handle, (A_UINT8*)temp_buf, count, 0, NULL, NULL);
+	}
+	else
+	{
+		qcom_printf("####write flash fail:%d\n",status);
+	}
+
+	// finally, close the handle
+	qcom_dset_close(handle, NULL, NULL);
+#endif
+	return 0;
+}
+
+int ww_read_nv(unsigned char *buf, unsigned int count,unsigned int dset_id)
+{
+        printf("enter ww_read_nv ***********\n");
+	int32_t status;
+	uint32_t handle;
+	int size = 0;
+
+	A_UINT8 temp_buf[WW_NVRAM_SIZE] = {0};
+	if( count > WW_NVRAM_SIZE )
+	{
+		qcom_printf("####write len > 256\n");
+		count = WW_NVRAM_SIZE;
+	}
+	// attempt to open the dset
+RETRY:
+	status = qcom_dset_open(&handle, dset_id, DSET_MEDIA_NVRAM, NULL, NULL);
+	if (status != A_OK) {
+		// there might not be a dset on the device at the moment,
+		qcom_printf("####open dset fail ,status = %d \n",status);
+		status = qcom_dset_create(&handle, dset_id, WW_NVRAM_SIZE, DSET_MEDIA_NVRAM, NULL, NULL);
+		if(status == A_OK)
+		{
+			qcom_printf("create dset successful\n");
+			goto RETRY;
+		}
+		//return -1;
+	}
+	size = qcom_dset_size(handle);
+	qcom_printf("####open dset size=%d,count=%d\n",size,count);
+
+	// now read from the dset into RAM
+	//status = ww_dset_read(handle, (A_UINT8*)IOT_EMULATED_NVRAM, sizeof(IOT_EMULATED_NVRAM), 0, NULL, NULL);
+	//size = size < WW_NVRAM_SIZE ? size : WW_NVRAM_SIZE;
+	status = qcom_dset_read(handle, (A_UINT8*)buf, count, 0, NULL, NULL);
+
+	if( status != A_OK )
+	{
+		qcom_printf("####read dset fail:%d\n",status);
+	}
+	else
+	{
+		size = qcom_dset_size(handle);
+		qcom_printf("####read dset size=%d\n",size);
+	}
+	qcom_dset_read(handle, (A_UINT8*)temp_buf, count, 0, NULL, NULL);
+
+	// finally, close the handle
+	qcom_dset_close(handle, NULL, NULL);
+	return 0;
+}
+
+void ww_erase_nv(unsigned int dset_id)
+{
+	qcom_dset_delete(dset_id, DSET_MEDIA_NVRAM, NULL, NULL);
+}
